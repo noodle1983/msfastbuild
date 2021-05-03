@@ -13,6 +13,7 @@ using System.Text;
 using Microsoft.Build.Evaluation;
 using Microsoft.Build.Construction;
 using Microsoft.Build.Utilities;
+using System.Diagnostics;
 
 namespace msfastbuild
 {
@@ -276,7 +277,7 @@ namespace msfastbuild
 
 			string BatchFileText = "@echo off\n"
 				+ "%comspec% /c \"\"" + VCBasePath
-				+ "vcvarsall.bat\" " + (Platform == "Win32" ? "x86" : "x64") + " " 
+				+ "vcvarsall.bat\" " + (Platform == "Win32" ? "amd64_x86" : "x64") + " " 
 				+ (PlatformToolsetVersion == "140" ? WindowsSDKTarget : "") // Only VS2015R3 specifies the WinSDK?
 				+ " && \"" + CommandLineOptions.FBPath  +"\" %*\"";
 			File.WriteAllText(projectDir + "fb.bat", BatchFileText);
@@ -384,6 +385,35 @@ namespace msfastbuild
 			}
 		}
 
+		static private Dictionary<string, string> GetCrossCompileEnv(string VcBasePath)
+        {
+			Dictionary<string, string> VcVars = new Dictionary<string, string>();
+			string scripts = File.ReadAllText(VcBasePath +"\\bin\\amd64_x86\\vcvarsamd64_x86.bat") + "\nset\nexit";
+			File.WriteAllText(".\\.vcvarsamd64_x86.bat", scripts);
+			var proc = new Process
+			{
+				StartInfo = new ProcessStartInfo
+				{
+					FileName = ".\\.vcvarsamd64_x86.bat",
+                    Arguments = "",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                }
+            };
+            proc.Start();
+            while (!proc.StandardOutput.EndOfStream)
+            {
+                string line = proc.StandardOutput.ReadLine();
+				var kvp = line.Split('=');
+				if (kvp.Length != 2) { continue; }
+				kvp[0] = kvp[0].ToUpper();
+				VcVars[kvp[0]] = kvp[1];
+				//Console.WriteLine(kvp[0] + "=" + kvp[1]);	
+            }
+			return VcVars;
+        }
+
 		static private void GenerateBffFromVcxproj(string Config, string Platform)
 		{
 			Project ActiveProject = CurrentProject.Proj;
@@ -412,15 +442,26 @@ namespace msfastbuild
 			VCBasePath = ActiveProject.GetProperty("VCInstallDir").EvaluatedValue;
 			OutputString.AppendFormat(".VCBasePath = '{0}'\n", VCBasePath);
 
+			Dictionary<string, string> VcVars = new Dictionary<string, string>() {
+				{ "INCLUDE", ""},
+				{ "LIB", ""},
+				{ "LIBPATH", ""},
+				{ "PATH", ""},
+			};
+			if (Platform == "Win32" || Platform == "x86" || true) //Hmm.
+            {
+				VcVars = GetCrossCompileEnv(VCBasePath);
+            }
+
 			WindowsSDKTarget = ActiveProject.GetProperty("WindowsTargetPlatformVersion") != null ? ActiveProject.GetProperty("WindowsTargetPlatformVersion").EvaluatedValue : "8.1";
 
 			OutputString.AppendFormat(".WindowsSDKBasePath = '{0}'\n\n", ActiveProject.GetProperty("WindowsSdkDir").EvaluatedValue);
 
 			OutputString.Append("Settings\n{\n\t.Environment = \n\t{\n");
-			OutputString.AppendFormat("\t\t\"INCLUDE={0}\",\n", ActiveProject.GetProperty("IncludePath").EvaluatedValue);
-			OutputString.AppendFormat("\t\t\"LIB={0}\",\n", ActiveProject.GetProperty("LibraryPath").EvaluatedValue);
-			OutputString.AppendFormat("\t\t\"LIBPATH={0}\",\n", ActiveProject.GetProperty("ReferencePath").EvaluatedValue);
-			OutputString.AppendFormat("\t\t\"PATH={0}\"\n", ActiveProject.GetProperty("Path").EvaluatedValue);
+			OutputString.AppendFormat("\t\t\"INCLUDE={0};{1}\",\n", VcVars["INCLUDE"], ActiveProject.GetProperty("IncludePath").EvaluatedValue);
+			OutputString.AppendFormat("\t\t\"LIB={0};{1}\",\n", VcVars["LIB"], ActiveProject.GetProperty("LibraryPath").EvaluatedValue);
+			OutputString.AppendFormat("\t\t\"LIBPATH={0};{1}\",\n", VcVars["LIBPATH"], ActiveProject.GetProperty("ReferencePath").EvaluatedValue);
+			OutputString.AppendFormat("\t\t\"PATH={0};{1}\"\n", VcVars["PATH"],ActiveProject.GetProperty("Path").EvaluatedValue);
 			OutputString.AppendFormat("\t\t\"TMP={0}\"\n", ActiveProject.GetProperty("Temp").EvaluatedValue);
 			OutputString.AppendFormat("\t\t\"TEMP={0}\"\n", ActiveProject.GetProperty("Temp").EvaluatedValue);
 			OutputString.AppendFormat("\t\t\"SystemRoot={0}\"\n", ActiveProject.GetProperty("SystemRoot").EvaluatedValue);
@@ -429,6 +470,7 @@ namespace msfastbuild
 			StringBuilder CompilerString = new StringBuilder("Compiler('msvc')\n{\n");
 
 			string CompilerRoot = CompilerRoot = VCBasePath + "bin/";
+			string CrossCompileX86Dir = "";
 			if (Platform == "Win64" || Platform == "x64")
 			{
 				CompilerString.Append("\t.Root = '$VSBasePath$/VC/bin/amd64'\n");
@@ -437,24 +479,25 @@ namespace msfastbuild
 			else if (Platform == "Win32" || Platform == "x86" || true) //Hmm.
 			{
 				CompilerString.Append("\t.Root = '$VSBasePath$/VC/bin'\n");
+				CrossCompileX86Dir = "amd64_x86/";
 			}
-			CompilerString.Append("\t.Executable = '$Root$/cl.exe'\n");
+			CompilerString.AppendFormat("\t.Executable = '$Root$/{0}cl.exe'\n", CrossCompileX86Dir);
 			CompilerString.Append("\t.ExtraFiles =\n\t{\n");
-			CompilerString.Append("\t\t'$Root$/c1.dll'\n");
-			CompilerString.Append("\t\t'$Root$/c1xx.dll'\n");
-			CompilerString.Append("\t\t'$Root$/c2.dll'\n");
+			CompilerString.AppendFormat("\t\t'$Root$/{0}c1.dll'\n", CrossCompileX86Dir);
+			CompilerString.AppendFormat("\t\t'$Root$/{0}c1xx.dll'\n", CrossCompileX86Dir);
+			CompilerString.AppendFormat("\t\t'$Root$/{0}c2.dll'\n", CrossCompileX86Dir);
 
-			if(File.Exists(CompilerRoot + "1033/clui.dll")) //Check English first...
+			if(File.Exists(CompilerRoot + CrossCompileX86Dir + "1033/clui.dll")) //Check English first...
 			{
-				CompilerString.Append("\t\t'$Root$/1033/clui.dll'\n");
+				CompilerString.AppendFormat("\t\t'$Root$/{0}1033/clui.dll'\n", CrossCompileX86Dir);
 			}
 			else
 			{
-				var numericDirectories = Directory.GetDirectories(CompilerRoot).Where(d => Path.GetFileName(d).All(char.IsDigit));
+				var numericDirectories = Directory.GetDirectories(CompilerRoot + CrossCompileX86Dir).Where(d => Path.GetFileName(d).All(char.IsDigit));
 				var cluiDirectories = numericDirectories.Where(d => Directory.GetFiles(d, "clui.dll").Any());
 				if(cluiDirectories.Any())
 				{
-					CompilerString.AppendFormat("\t\t'$Root$/{0}/clui.dll'\n", Path.GetFileName(cluiDirectories.First()));
+					CompilerString.AppendFormat("\t\t'$Root$/{0}{1}/clui.dll'\n", CrossCompileX86Dir, Path.GetFileName(cluiDirectories.First()));
 				}
 			}
 			
@@ -486,7 +529,7 @@ namespace msfastbuild
 					if(!string.IsNullOrEmpty(mdPi.EvaluatedValue))
 					{
 						string BatchText = "call \"" + VCBasePath + "vcvarsall.bat\" " + 
-							(Platform == "Win32" ? "x86" : "x64") + " "
+							(Platform == "Win32" ? "amd64_x86" : "x64") + " "
 							+ (PlatformToolsetVersion == "140" ? WindowsSDKTarget : "") + "\n";
 						PreBuildBatchFile = Path.Combine(ActiveProject.DirectoryPath, Path.GetFileNameWithoutExtension(ActiveProject.FullPath) + "_prebuild.bat");
 						File.WriteAllText(PreBuildBatchFile, BatchText + mdPi.EvaluatedValue);						
@@ -601,7 +644,7 @@ namespace msfastbuild
 
 				if (Platform == "Win32" || Platform == "x86")
 				{
-					OutputString.Append("\t.Linker = '$VSBasePath$\\VC\\bin\\link.exe'\n");
+					OutputString.Append("\t.Linker = '$VSBasePath$\\VC\\bin\\amd64_x86\\link.exe'\n");
 				}
 				else
 				{
@@ -650,7 +693,7 @@ namespace msfastbuild
 
 				if (Platform == "Win32" || Platform == "x86")
 				{
-					OutputString.Append("\t.Librarian = '$VSBasePath$\\VC\\bin\\lib.exe'\n");
+					OutputString.Append("\t.Librarian = '$VSBasePath$\\VC\\bin\\amd64_x86\\lib.exe'\n");
 				}
 				else
 				{
@@ -699,7 +742,7 @@ namespace msfastbuild
 					if(!string.IsNullOrEmpty(MetaData.EvaluatedValue))
 					{
 						string BatchText = "call \"" + VCBasePath + "vcvarsall.bat\" " +
-							   (Platform == "Win32" ? "x86" : "x64") + " "
+							   (Platform == "Win32" ? "amd64_x86" : "x64") + " "
 							   + (PlatformToolsetVersion == "140" ? WindowsSDKTarget : "") + "\n";
 						PostBuildBatchFile = Path.Combine(ActiveProject.DirectoryPath, Path.GetFileNameWithoutExtension(ActiveProject.FullPath) + "_postbuild.bat");
 						File.WriteAllText(PostBuildBatchFile, BatchText + MetaData.EvaluatedValue);
