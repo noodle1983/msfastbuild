@@ -471,6 +471,7 @@ namespace msfastbuild
 
 			string CompilerRoot = CompilerRoot = VCBasePath + "bin/";
 			string CrossCompileX86Dir = "";
+			string CrossCompileAmd64Dir = "";
 			if (Platform == "Win64" || Platform == "x64")
 			{
 				CompilerString.Append("\t.Root = '$VSBasePath$/VC/bin/amd64'\n");
@@ -480,6 +481,7 @@ namespace msfastbuild
 			{
 				CompilerString.Append("\t.Root = '$VSBasePath$/VC/bin'\n");
 				CrossCompileX86Dir = "amd64_x86/";
+                CrossCompileAmd64Dir = "amd64/";
 			}
 			CompilerString.AppendFormat("\t.Executable = '$Root$/{0}cl.exe'\n", CrossCompileX86Dir);
 			CompilerString.Append("\t.ExtraFiles =\n\t{\n");
@@ -501,12 +503,12 @@ namespace msfastbuild
 				}
 			}
 			
-			CompilerString.Append("\t\t'$Root$/mspdbsrv.exe'\n");
-			CompilerString.Append("\t\t'$Root$/mspdbcore.dll'\n");
+			CompilerString.AppendFormat("\t\t'$Root$/{0}mspdbsrv.exe'\n", CrossCompileAmd64Dir);
+			CompilerString.AppendFormat("\t\t'$Root$/{0}mspdbcore.dll'\n", CrossCompileAmd64Dir);
 			
-			CompilerString.AppendFormat("\t\t'$Root$/mspft{0}.dll'\n", PlatformToolsetVersion);
-			CompilerString.AppendFormat("\t\t'$Root$/msobj{0}.dll'\n", PlatformToolsetVersion);
-			CompilerString.AppendFormat("\t\t'$Root$/mspdb{0}.dll'\n", PlatformToolsetVersion);
+			CompilerString.AppendFormat("\t\t'$Root$/{0}mspft{1}.dll'\n", CrossCompileAmd64Dir, PlatformToolsetVersion);
+			CompilerString.AppendFormat("\t\t'$Root$/{0}msobj{1}.dll'\n", CrossCompileAmd64Dir, PlatformToolsetVersion);
+			CompilerString.AppendFormat("\t\t'$Root$/{0}mspdb{1}.dll'\n", CrossCompileAmd64Dir, PlatformToolsetVersion);
 			CompilerString.AppendFormat("\t\t'$VSBasePath$/VC/redist/{0}/Microsoft.VC{1}.CRT/msvcp{1}.dll'\n", Platform == "Win32" ? "x86" : "x64", PlatformToolsetVersion);
 			CompilerString.AppendFormat("\t\t'$VSBasePath$/VC/redist/{0}/Microsoft.VC{1}.CRT/vccorlib{1}.dll'\n", Platform == "Win32" ? "x86" : "x64", PlatformToolsetVersion);
 			
