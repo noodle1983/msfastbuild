@@ -35,7 +35,7 @@ namespace msfastbuild
 		HelpText = "Platform to build.")]
 		public string Platform { get; set; }
 
-		[Option('a', "fbargs", DefaultValue = "-dist",
+		[Option('a', "fbargs", DefaultValue = "-dist -ide -nounity",
 		HelpText = "Arguments to pass through to FASTBuild.")]
 		public string FBArgs { get; set; }
 		
@@ -414,7 +414,20 @@ namespace msfastbuild
 			return VcVars;
         }
 
-		static private void GenerateBffFromVcxproj(string Config, string Platform)
+        static string FixCompilerOptionsForCache(string options)
+        {
+            if (options.Contains("/Zi"))
+            {
+                return options.Replace("/Zi", "/Z7");
+            }
+            if (options.Contains("/ZI"))
+            {
+                return options.Replace("/ZI", "/Z7");
+            }
+            return options + " /Z7";
+        }
+
+        static private void GenerateBffFromVcxproj(string Config, string Platform)
 		{
 			Project ActiveProject = CurrentProject.Proj;
 			string MD5hash = "wafflepalooza";
@@ -562,7 +575,8 @@ namespace msfastbuild
 						ToolTask CLtask = (ToolTask)Activator.CreateInstance(CPPTasksAssembly.GetType("Microsoft.Build.CPPTasks.CL"));
 						CLtask.GetType().GetProperty("Sources").SetValue(CLtask, new TaskItem[] { new TaskItem() });
 						string pchCompilerOptions = GenerateTaskCommandLine(CLtask, new string[] { "PrecompiledHeaderOutputFile", "ObjectFileName", "AssemblerListingLocation" }, Item.Metadata) + " /FS";
-						PrecompiledHeaderString = "\t.PCHOptions = '" + string.Format("\"%1\" /Fp\"%2\" /Fo\"%3\" {0} '\n", pchCompilerOptions);
+                        pchCompilerOptions = FixCompilerOptionsForCache(pchCompilerOptions);
+                        PrecompiledHeaderString = "\t.PCHOptions = '" + string.Format("\"%1\" /Fp\"%2\" /Fo\"%3\" {0} '\n", pchCompilerOptions);
 						PrecompiledHeaderString += "\t.PCHInputFile = '" + Item.EvaluatedInclude + "'\n";
 						PrecompiledHeaderString += "\t.PCHOutputFile = '" + Item.GetMetadataValue("PrecompiledHeaderOutputFile") + "'\n";
 						break; //Assumes only one pch...
@@ -590,8 +604,10 @@ namespace msfastbuild
 					TempCompilerOptions += " /TC";
 				else
 					TempCompilerOptions += " /TP";
-				CompilerOptions = TempCompilerOptions;
-				string FormattedCompilerOptions = string.Format("\"%1\" /Fo\"%2\" {0}", TempCompilerOptions);
+                TempCompilerOptions = FixCompilerOptionsForCache(TempCompilerOptions);
+                CompilerOptions = TempCompilerOptions;
+
+                string FormattedCompilerOptions = string.Format("\"%1\" /Fo\"%2\" {0}", TempCompilerOptions);
 				var MatchingNodes = ObjectLists.Where(el => el.AddIfMatches(Item.EvaluatedInclude, "msvc", IntDir, FormattedCompilerOptions, ExcludePrecompiledHeader ? "" : PrecompiledHeaderString));
 				if(!MatchingNodes.Any())
 				{
@@ -725,6 +741,10 @@ namespace msfastbuild
 				{
 					linkerOptions += CurrentProject.AdditionalLinkInputs;
 				}
+                if (!linkerOptions.Contains("/INCREMENTAL"))
+                {
+                    linkerOptions += "/INCREMENTAL";
+                }
 				OutputString.AppendFormat("\t.LibrarianOptions = '\"%1\" /OUT:\"%2\" {0}'\n", linkerOptions);
 				OutputString.AppendFormat("\t.LibrarianOutput = '{0}'\n", OutputFile);
 
@@ -803,5 +823,4 @@ namespace msfastbuild
 			return GenCmdLineMethod.Invoke(Task, new object[] { Type.Missing, Type.Missing }) as string;
 		}
 	}
-
 }

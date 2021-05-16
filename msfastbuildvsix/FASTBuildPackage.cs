@@ -14,13 +14,13 @@ namespace msfastbuildvsix
 {
 	public class OptionPageGrid : DialogPage
 	{
-		private string FBArgs = "-dist -ide";
+		private string FBArgs = "-dist -ide -nounity";
 		private string FBPath = "fbuild.exe";
 		private bool FBUnity = false;
 
 		[Category("msfastbuild")]
 		[DisplayName("FASTBuild arguments")]
-		[Description("Arguments that will be passed to FASTBuild, default \"-dist -ide\"")]
+		[Description("Arguments that will be passed to FASTBuild, default \"-dist -ide -nounity\"")]
 		public string OptionFBArgs
 		{
 			get { return FBArgs; }
