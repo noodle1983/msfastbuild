@@ -53,6 +53,7 @@ namespace msfastbuildvsix
 	[ProvideOptionPage(typeof(OptionPageGrid),
 	"msfastbuild", "Options", 0, 0, true)]
 	[SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
+	[ProvideToolWindow(typeof(BuildAndRunWindow))]
 	public sealed class FASTBuildPackage : Package
 	{
 		/// <summary>
@@ -117,6 +118,8 @@ namespace msfastbuildvsix
 
 			m_outputPane = outputWindow.OutputWindowPanes.Add("FASTBuild");
 			m_outputPane.OutputString("FASTBuild\r");
+		    LaunchDebugger.Initialize(this);
+		    BuildAndRunWindowCommand.Initialize(this);
 		}
 
 		#endregion
