@@ -10,8 +10,23 @@
              Name="MyToolWindow">
     <Grid>
         <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Width="200" Background="White" Height ="40" Text="192.168.0.1" TextAlignment="Center" FontSize="30" />
+                <Button Content="InstallFastbuild" Click="button1_Click" Width="90" Height="40" x:Name="InstallBtn" Margin="10,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Build All" Click="button1_Click" Width="90" Height="40" x:Name="BuildAllBtn" Margin="0"/>
+                <Button Content="Clean" Click="button1_Click" Width="90" Height="40" x:Name="CleanAllBtn" Margin="10"/>
+                <Button Content="Run All" Click="button1_Click" Width="90" Height="40" x:Name="RunAllBtn" Margin="10"/>
+            </StackPanel>
+            <ScrollViewer>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="10" Width="180" HorizontalAlignment="Left" VerticalAlignment="Center">ProjectName</TextBlock>
+                    <Button Content="Run" Click="button1_Click" Width="90" Height="30" x:Name="RunBtn" Margin="10"/>
+                </StackPanel>
+
+            </ScrollViewer>
             <TextBlock Margin="10" HorizontalAlignment="Center">BuildAndRunWindow</TextBlock>
-            <Button Content="Click me!" Click="button1_Click" Width="120" Height="80" Name="button1"/>
         </StackPanel>
     </Grid>
 </UserControl>
