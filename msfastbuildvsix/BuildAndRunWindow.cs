@@ -15,12 +15,22 @@ namespace msfastbuildvsix
     using System.Collections.Generic;
     using Microsoft.VisualStudio.VCProjectEngine;
     using EnvDTE;
+    using Newtonsoft.Json;
+    using System.IO;
 
-    public struct RunnerInfo
+    [Serializable]
+    public struct DebugInstanceInfo
     {
         public string projectName;
         public string cmdParam;
         public string cmdDir;
+
+    }
+
+    [Serializable]
+    public struct ConfigStruct
+    {
+        public Dictionary<string, List<DebugInstanceInfo>> allDebugInstance;
     }
 
     /// <summary>
@@ -37,8 +47,10 @@ namespace msfastbuildvsix
     [Guid("52b8741c-7f01-4309-826e-0a2db0b2b298")]
     public class BuildAndRunWindow : ToolWindowPane
     {
-        public static string slnName = GetSlnName();
-        public static string GetSlnName()
+        public static Dictionary<string, List<DebugInstanceInfo>> allDebugInstance = new Dictionary<string, List<DebugInstanceInfo>>();
+
+
+        public static string GetSlnFullPathName()
         {
             var package = FASTBuild.Instance.Package;
             if (null == package || null == package.m_dte.Solution) {
@@ -47,7 +59,13 @@ namespace msfastbuildvsix
             return package.m_dte.Solution.FullName;
         }
 
-        public static List<VCProject> allAppVcProject = GetAllVcProject();
+        public static string GetSlnName()
+        {
+            var fullName = GetSlnFullPathName();
+            if (string.IsNullOrEmpty(fullName)) { return string.Empty; }
+            return Path.GetFileNameWithoutExtension(fullName);
+        }
+
         public static List<VCProject> GetAllVcProject()
         {
             List<VCProject> allVcProject = new List<VCProject>() ;
@@ -72,6 +90,57 @@ namespace msfastbuildvsix
 
             return allVcProject;
 
+        }
+
+        public static string GetConfigPath()
+        {
+            var package = FASTBuild.Instance.Package;
+            if (null == package || null == package.m_dte.Solution)
+            {
+                return string.Empty;
+            }
+
+            string slnPath = package.m_dte.Solution.FullName;
+
+            string dir = Path.GetDirectoryName(slnPath);
+            string slnName = Path.GetFileNameWithoutExtension(slnPath);
+            return dir + "\\" + slnName + ".debuginstance.json";
+            
+        }
+
+        public static void WriteCofnigFile()
+        {
+            var configPath = GetConfigPath();
+            ConfigStruct config;
+            config.allDebugInstance = allDebugInstance;
+            string fileContent = JsonConvert.SerializeObject(config);
+            File.WriteAllText(configPath, fileContent);
+        }
+
+        public Dictionary<string, List<DebugInstanceInfo>> GetDebugInstanceConfig()
+        {
+            var configPath = GetConfigPath();
+            if (!File.Exists(configPath))
+            {
+                allDebugInstance = new Dictionary<string, List<DebugInstanceInfo>>();
+                var defaultInstance = new List<DebugInstanceInfo>();
+                var projects = GetAllVcProject();
+                if (projects.Count == 0) { return allDebugInstance; }
+                foreach(var proj in projects)
+                {
+                    DebugInstanceInfo info = new DebugInstanceInfo();
+                    info.projectName = proj.Name;
+                    defaultInstance.Add(info);
+                }
+                allDebugInstance["default"] = defaultInstance;
+
+                WriteCofnigFile();
+                return allDebugInstance;
+            }
+
+            var configStruct = JsonConvert.DeserializeObject<ConfigStruct>(configPath);
+            allDebugInstance = configStruct.allDebugInstance;
+            return allDebugInstance;
         }
         /// <summary>
         /// Initializes a new instance of the <see cref="BuildAndRunWindow"/> class.
@@ -102,6 +171,13 @@ namespace msfastbuildvsix
         {
             this.Caption = "BuildAndRunWindow";
 
+
+            GetDebugInstanceConfig();
+            CreateContent();
+        }
+
+        private void CreateContent()
+        {
             // Add Layout control
             var topStackPanel = new StackPanel();
             topStackPanel.Orientation = Orientation.Vertical;
@@ -184,7 +260,7 @@ namespace msfastbuildvsix
                 scrollViewer.Content = scrollViewStackPanel;
                 topStackPanel.Children.Add(scrollViewer);
 
-                for(int i = 0; i < 3; i++)
+                for (int i = 0; i < 3; i++)
                 {
                     var projStackPanel = new StackPanel();
                     projStackPanel.Orientation = Orientation.Horizontal;
@@ -192,7 +268,7 @@ namespace msfastbuildvsix
                     projStackPanel.VerticalAlignment = VerticalAlignment.Top;
                     var panelBtn = new Button();
                     panelBtn.Content = projStackPanel;
-                    panelBtn.Click += new RoutedEventHandler(showProjParam) ;
+                    panelBtn.Click += new RoutedEventHandler(showProjParam);
                     scrollViewStackPanel.Children.Add(panelBtn);
 
                     var projectNameTextBlock = new TextBlock();
@@ -202,7 +278,7 @@ namespace msfastbuildvsix
                     //projectNameTextBlock.FontSize = 0;
                     projectNameTextBlock.TextAlignment = TextAlignment.Center;
                     projectNameTextBlock.VerticalAlignment = VerticalAlignment.Center;
-                    projectNameTextBlock.Text = slnName;
+                    projectNameTextBlock.Text = GetSlnFullPathName(); ;
                     projStackPanel.Children.Add(projectNameTextBlock);
 
                     var runButton = new Button();
@@ -282,7 +358,7 @@ namespace msfastbuildvsix
                 runParamValueBlock.Width = 200;
                 runParamValueBlock.Height = 30;
                 runParamValueBlock.TextAlignment = TextAlignment.Center;
-                runParamValueBlock.Text = "...";
+                runParamValueBlock.Text = GetConfigPath() ;
                 runParamStackPanel.Children.Add(runParamValueBlock);
             }
 
@@ -308,7 +384,7 @@ namespace msfastbuildvsix
                 runDirValueBlock.Width = 200;
                 runDirValueBlock.Height = 30;
                 runDirValueBlock.TextAlignment = TextAlignment.Center;
-                runDirValueBlock.Text = "...";
+                runDirValueBlock.Text = GetSlnName();
                 runDirStackPanel.Children.Add(runDirValueBlock);
             }
 
