@@ -80,6 +80,14 @@ namespace msfastbuildvsix
             private set;
         }
 
+		public FASTBuildPackage Package
+        {
+            get
+            {
+				return (FASTBuildPackage)this.package;
+            }
+        }
+
         /// <summary>
         /// Gets the service provider from the owner package.
         /// </summary>

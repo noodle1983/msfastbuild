@@ -741,7 +741,7 @@ namespace msfastbuild
 				{
 					linkerOptions += CurrentProject.AdditionalLinkInputs;
 				}
-                if (!linkerOptions.Contains("/INCREMENTAL"))
+                if (!linkerOptions.Contains("/INCREMENTAL /verbose:incr /time"))
                 {
                     linkerOptions += "/INCREMENTAL";
                 }
